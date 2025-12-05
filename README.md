@@ -2,28 +2,22 @@
 
 A simple command-line tool to convert FLAC audio files to ALAC (Apple Lossless Audio Codec) format for use with iTunes and Apple devices.
 
-Available in both **Python** and **Bash** versions - choose whichever you prefer!
+Available as both a **standalone bash script** and a **zsh function** for easy use in your terminal.
 
 ## Quick Start
 
-### Python Version
+### Zsh Function (Recommended)
 
-**Convert a single file:**
+If installed in your `.zshrc`, simply use:
+
 ```bash
-python3 flac_to_alac.py song.flac
+f2a                    # Convert all FLAC files in current directory
+f2a song.flac          # Convert single file
+f2a /path/to/flac/files  # Convert all FLAC files in directory
+f2a /path/to/flac/files --output-dir /path/to/output  # Convert to specific directory
 ```
 
-**Convert all FLAC files in a directory:**
-```bash
-python3 flac_to_alac.py /path/to/flac/files
-```
-
-**Convert to a specific output directory:**
-```bash
-python3 flac_to_alac.py /path/to/flac/files --output-dir /path/to/output
-```
-
-### Bash Version
+### Standalone Bash Script
 
 **Convert a single file:**
 ```bash
@@ -45,26 +39,50 @@ python3 flac_to_alac.py /path/to/flac/files --output-dir /path/to/output
 chmod +x flac_to_alac.sh
 ```
 
+## Installation
+
+### Install as Zsh Function
+
+Add this to your `~/.zshrc`:
+
+```bash
+# FLAC to ALAC converter function
+f2a() {
+  local target="${1:-.}"
+  local output_dir="${2:-}"
+  local overwrite="${3:-}"
+  
+  # Build command
+  local cmd="$HOME/Sites/flac-to-alac/flac_to_alac.sh"
+  
+  if [ -n "$output_dir" ]; then
+    cmd="$cmd --output-dir \"$output_dir\""
+  fi
+  
+  if [ "$overwrite" = "--overwrite" ]; then
+    cmd="$cmd --overwrite"
+  fi
+  
+  eval "$cmd \"$target\""
+}
+```
+
+Or simply source the function file if provided.
+
 ## Features
 
 - ✅ Lossless conversion (FLAC → ALAC)
 - ✅ Preserves metadata (tags, artwork, etc.)
 - ✅ Batch conversion support
 - ✅ Recursive directory scanning
-- ✅ Progress feedback
+- ✅ Progress feedback with colors
 - ✅ Error handling
+- ✅ Works as standalone script or zsh function
 
 ## Requirements
 
-**For Python version:**
-- Python 3.6+
+- Bash 4.0+ (standard on macOS) or Zsh
 - `ffmpeg` (install with `brew install ffmpeg`)
-
-**For Bash version:**
-- Bash 4.0+ (standard on macOS)
-- `ffmpeg` (install with `brew install ffmpeg`)
-
-Both versions have identical functionality - choose based on your preference!
 
 ## Why ALAC?
 
@@ -118,7 +136,7 @@ find . -name "*.flac" -exec sh -c 'ffmpeg -i "$1" -c:a alac "${1%.flac}.m4a"' _ 
 
 | Tool | Type | Batch | Metadata | Ease of Use |
 |------|------|-------|----------|-------------|
-| **This script** | CLI | ✅ | ✅ | ⭐⭐⭐ |
+| **This script** | CLI | ✅ | ✅ | ⭐⭐⭐⭐ |
 | **XLD** | GUI | ✅ | ✅ | ⭐⭐⭐⭐⭐ |
 | **MediaHuman** | GUI | ✅ | ✅ | ⭐⭐⭐⭐ |
 | **Audacity** | GUI | ❌ | ✅ | ⭐⭐ |
@@ -137,9 +155,7 @@ find . -name "*.flac" -exec sh -c 'ffmpeg -i "$1" -c:a alac "${1%.flac}.m4a"' _ 
 - Install with: `brew install ffmpeg`
 
 **"Permission denied"**
-- Make script executable: 
-  - Python: `chmod +x flac_to_alac.py`
-  - Bash: `chmod +x flac_to_alac.sh`
+- Make script executable: `chmod +x flac_to_alac.sh`
 
 **Files not converting**
 - Check that input files are actually FLAC format

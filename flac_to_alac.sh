@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# FLAC to ALAC Converter Tool (Bash Version)
+# FLAC to ALAC Converter Tool
 #
 # Converts FLAC audio files to ALAC (Apple Lossless Audio Codec) format.
 # Preserves metadata and supports batch conversion.
@@ -70,11 +70,21 @@ convert_flac_to_alac() {
     local output_file="$2"
     local overwrite_flag="$3"
     
-    local input_path=$(realpath "$input_file")
+    local input_path
+    if command -v realpath &> /dev/null; then
+        input_path=$(realpath "$input_file")
+    else
+        input_path=$(cd "$(dirname "$input_file")" && pwd)/$(basename "$input_file")
+    fi
+    
     local output_path
     
     if [ -n "$output_file" ]; then
-        output_path=$(realpath -m "$output_file")
+        if command -v realpath &> /dev/null; then
+            output_path=$(realpath -m "$output_file")
+        else
+            output_path="$output_file"
+        fi
     else
         # Generate output filename by replacing .flac with .m4a
         output_path="${input_path%.flac}.m4a"
@@ -86,8 +96,9 @@ convert_flac_to_alac() {
         return 1
     fi
     
-    # Check if it's a FLAC file
-    if [[ ! "${input_path,,}" =~ \.flac$ ]]; then
+    # Check if it's a FLAC file (case-insensitive)
+    local input_lower="${input_path,,}"
+    if [[ ! "$input_lower" =~ \.flac$ ]]; then
         echo -e "${YELLOW}Warning: $input_file doesn't appear to be a FLAC file${NC}" >&2
     fi
     
@@ -189,11 +200,17 @@ if [ ! -e "$INPUT" ]; then
     exit 1
 fi
 
-INPUT_PATH=$(realpath "$INPUT")
+INPUT_PATH="$INPUT"
+if command -v realpath &> /dev/null; then
+    INPUT_PATH=$(realpath "$INPUT")
+fi
 
 # Determine output directory
 if [ -n "$OUTPUT_DIR" ]; then
-    OUTPUT_DIR_PATH=$(realpath -m "$OUTPUT_DIR")
+    OUTPUT_DIR_PATH="$OUTPUT_DIR"
+    if command -v realpath &> /dev/null; then
+        OUTPUT_DIR_PATH=$(realpath -m "$OUTPUT_DIR")
+    fi
     mkdir -p "$OUTPUT_DIR_PATH"
 else
     OUTPUT_DIR_PATH=""
@@ -205,7 +222,10 @@ FILES_TO_CONVERT=()
 if [ -f "$INPUT_PATH" ]; then
     FILES_TO_CONVERT=("$INPUT_PATH")
 elif [ -d "$INPUT_PATH" ]; then
-    mapfile -t FILES_TO_CONVERT < <(find_flac_files "$INPUT_PATH" "$RECURSIVE")
+    while IFS= read -r -d '' file; do
+        FILES_TO_CONVERT+=("$file")
+    done < <(find_flac_files "$INPUT_PATH" "$RECURSIVE" | tr '\n' '\0')
+    
     if [ ${#FILES_TO_CONVERT[@]} -eq 0 ]; then
         echo -e "${YELLOW}No FLAC files found in: $INPUT_PATH${NC}"
         exit 1
