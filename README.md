@@ -2,26 +2,47 @@
 
 A simple command-line tool to convert FLAC audio files to ALAC (Apple Lossless Audio Codec) format for use with iTunes and Apple devices.
 
+Available in both **Python** and **Bash** versions - choose whichever you prefer!
+
 ## Quick Start
 
-### Convert a single file:
+### Python Version
+
+**Convert a single file:**
 ```bash
 python3 flac_to_alac.py song.flac
 ```
 
-### Convert all FLAC files in a directory:
+**Convert all FLAC files in a directory:**
 ```bash
 python3 flac_to_alac.py /path/to/flac/files
 ```
 
-### Convert to a specific output directory:
+**Convert to a specific output directory:**
 ```bash
 python3 flac_to_alac.py /path/to/flac/files --output-dir /path/to/output
 ```
 
-### Using the wrapper script:
+### Bash Version
+
+**Convert a single file:**
 ```bash
-./flac2alac song.flac
+./flac_to_alac.sh song.flac
+```
+
+**Convert all FLAC files in a directory:**
+```bash
+./flac_to_alac.sh /path/to/flac/files
+```
+
+**Convert to a specific output directory:**
+```bash
+./flac_to_alac.sh /path/to/flac/files --output-dir /path/to/output
+```
+
+**Make executable (if needed):**
+```bash
+chmod +x flac_to_alac.sh
 ```
 
 ## Features
@@ -35,8 +56,15 @@ python3 flac_to_alac.py /path/to/flac/files --output-dir /path/to/output
 
 ## Requirements
 
+**For Python version:**
 - Python 3.6+
-- `ffmpeg` (already installed on your system via Homebrew)
+- `ffmpeg` (install with `brew install ffmpeg`)
+
+**For Bash version:**
+- Bash 4.0+ (standard on macOS)
+- `ffmpeg` (install with `brew install ffmpeg`)
+
+Both versions have identical functionality - choose based on your preference!
 
 ## Why ALAC?
 
@@ -109,7 +137,9 @@ find . -name "*.flac" -exec sh -c 'ffmpeg -i "$1" -c:a alac "${1%.flac}.m4a"' _ 
 - Install with: `brew install ffmpeg`
 
 **"Permission denied"**
-- Make script executable: `chmod +x flac_to_alac.py`
+- Make script executable: 
+  - Python: `chmod +x flac_to_alac.py`
+  - Bash: `chmod +x flac_to_alac.sh`
 
 **Files not converting**
 - Check that input files are actually FLAC format
