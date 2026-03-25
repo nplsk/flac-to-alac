@@ -64,7 +64,7 @@ check_ffmpeg() {
     fi
 }
 
-# Function to convert a single FLAC file to ALAC
+# Convert one file. Exit: 0 = converted OK, 1 = error, 2 = skipped (non-empty output exists, no --overwrite)
 convert_flac_to_alac() {
     local input_file="$1"
     local output_file="$2"
@@ -80,14 +80,14 @@ convert_flac_to_alac() {
     local output_path
     
     if [ -n "$output_file" ]; then
-        if command -v realpath &> /dev/null; then
-            output_path=$(realpath -m "$output_file")
-        else
-            output_path="$output_file"
-        fi
+        # macOS realpath has no -m; join after mkdir so path is absolute
+        local out_dir
+        out_dir=$(dirname "$output_file")
+        mkdir -p "$out_dir"
+        output_path="$(cd "$out_dir" && pwd)/$(basename "$output_file")"
     else
-        # Generate output filename by replacing .flac with .m4a
-        output_path="${input_path%.flac}.m4a"
+        # %.* strips any final extension (.flac, .FLAC, etc.)
+        output_path="${input_path%.*}.m4a"
     fi
     
     # Check if input file exists
@@ -95,17 +95,24 @@ convert_flac_to_alac() {
         echo -e "${RED}Error: File not found: $input_file${NC}" >&2
         return 1
     fi
-    
-    # Check if it's a FLAC file (case-insensitive)
-    local input_lower="${input_path,,}"
+
+    # Check if it's a FLAC file (case-insensitive; tr works on macOS bash 3.2 — no ${var,,})
+    local input_lower
+    input_lower=$(printf '%s' "$input_path" | tr '[:upper:]' '[:lower:]')
     if [[ ! "$input_lower" =~ \.flac$ ]]; then
         echo -e "${YELLOW}Warning: $input_file doesn't appear to be a FLAC file${NC}" >&2
     fi
+
+    # Stale 0-byte (or interrupted) outputs: remove so ffmpeg can write; otherwise -n would block forever
+    if [ -f "$output_path" ] && [ ! -s "$output_path" ]; then
+        echo -e "${YELLOW}Removing empty output (re-encoding): $(basename "$output_path")${NC}" >&2
+        rm -f "$output_path"
+    fi
     
-    # Check if output file already exists
-    if [ -f "$output_path" ] && [ "$overwrite_flag" = "false" ]; then
+    # Skip only when a non-empty output already exists
+    if [ -f "$output_path" ] && [ -s "$output_path" ] && [ "$overwrite_flag" = "false" ]; then
         echo "Skipping $(basename "$input_path") - output file already exists: $(basename "$output_path")"
-        return 0
+        return 2
     fi
     
     echo "Converting: $(basename "$input_path") -> $(basename "$output_path")"
@@ -114,22 +121,23 @@ convert_flac_to_alac() {
     local output_dir=$(dirname "$output_path")
     mkdir -p "$output_dir"
     
-    # ffmpeg command to convert FLAC to ALAC
-    # -i: input file
-    # -c:a alac: use ALAC codec for audio
-    # -y: overwrite output file if exists (when overwrite=true)
-    # -n: don't overwrite (when overwrite=false)
-    # -loglevel error: only show errors
+    # ffmpeg: -map 0:a = encode all audio streams; global -y/-n before -i
     local overwrite_opt="-n"
     if [ "$overwrite_flag" = "true" ]; then
         overwrite_opt="-y"
     fi
     
-    if ffmpeg -i "$input_path" -c:a alac $overwrite_opt -loglevel error "$output_path" 2>&1; then
+    if ffmpeg -hide_banner -nostdin $overwrite_opt -loglevel error -i "$input_path" -map 0:a -c:a alac "$output_path" 2>&1; then
+        if [ ! -s "$output_path" ]; then
+            echo -e "  ${RED}✗${NC} Output file is empty after encode: $(basename "$output_path")" >&2
+            rm -f "$output_path"
+            return 1
+        fi
         echo -e "  ${GREEN}✓${NC} Success: $(basename "$output_path")"
         return 0
     else
-        echo -e "  ${RED}✗${NC} Error converting $(basename "$input_path")"
+        echo -e "  ${RED}✗${NC} Error converting $(basename "$input_path")" >&2
+        rm -f "$output_path" 2>/dev/null || true
         return 1
     fi
 }
@@ -205,13 +213,14 @@ if command -v realpath &> /dev/null; then
     INPUT_PATH=$(realpath "$INPUT")
 fi
 
-# Determine output directory
+# Determine output directory (avoid realpath -m: not supported on macOS BSD realpath)
 if [ -n "$OUTPUT_DIR" ]; then
-    OUTPUT_DIR_PATH="$OUTPUT_DIR"
+    mkdir -p "$OUTPUT_DIR"
     if command -v realpath &> /dev/null; then
-        OUTPUT_DIR_PATH=$(realpath -m "$OUTPUT_DIR")
+        OUTPUT_DIR_PATH=$(realpath "$OUTPUT_DIR")
+    else
+        OUTPUT_DIR_PATH=$(cd "$OUTPUT_DIR" && pwd)
     fi
-    mkdir -p "$OUTPUT_DIR_PATH"
 else
     OUTPUT_DIR_PATH=""
 fi
@@ -239,7 +248,8 @@ echo "Found ${#FILES_TO_CONVERT[@]} FLAC file(s) to convert"
 echo ""
 
 # Convert files
-SUCCESSFUL=0
+CONVERTED=0
+SKIPPED=0
 FAILED=0
 
 for flac_file in "${FILES_TO_CONVERT[@]}"; do
@@ -252,23 +262,25 @@ for flac_file in "${FILES_TO_CONVERT[@]}"; do
             # Directory case - preserve relative path
             relative_path="${flac_file#$INPUT_PATH/}"
         fi
-        output_file="$OUTPUT_DIR_PATH/${relative_path%.flac}.m4a"
+        output_file="$OUTPUT_DIR_PATH/${relative_path%.*}.m4a"
     else
         output_file=""
     fi
-    
-    if convert_flac_to_alac "$flac_file" "$output_file" "$OVERWRITE"; then
-        ((SUCCESSFUL++))
-    else
-        ((FAILED++))
-    fi
+
+    convert_flac_to_alac "$flac_file" "$output_file" "$OVERWRITE"
+    case $? in
+        0) ((CONVERTED++)) ;;
+        2) ((SKIPPED++)) ;;
+        *) ((FAILED++)) ;;
+    esac
 done
 
 # Summary
 echo ""
 echo "=================================================="
 echo "Conversion complete!"
-echo "  Successful: $SUCCESSFUL"
+echo "  Converted: $CONVERTED"
+echo "  Skipped (already exists): $SKIPPED"
 echo "  Failed: $FAILED"
 echo "  Total: ${#FILES_TO_CONVERT[@]}"
 echo "=================================================="
